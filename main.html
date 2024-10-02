@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebXR AR Circle Example</title>
+  <style>
+    body { margin: 0; padding: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+</head>
+<body>
+  <script>
+    let camera, scene, renderer, controller;
+    let reticle;
+
+    init();
+    animate();
+
+    function init() {
+      const canvas = document.createElement('canvas');
+      document.body.appendChild(canvas);
+
+      // Создание сцены и камеры
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      document.body.appendChild(renderer.domElement);
+
+      // Добавление сетки для плоскости (индикатор обнаружения пола)
+      const geometry = new THREE.CircleGeometry(0.5, 32);  // Круг радиусом 0.5 метра
+      const material = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide });
+      reticle = new THREE.Mesh(geometry, material);
+      reticle.rotation.x = -Math.PI / 2;
+      reticle.visible = false;
+      scene.add(reticle);
+
+      // Создание AR-сессии
+      document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+      const session = renderer.xr.getSession();
+
+      session.addEventListener('select', () => {
+        const circle = reticle.clone();
+        scene.add(circle);
+      });
+
+      const xrHitTestSource = session.requestHitTestSource({ space: renderer.xr.getReferenceSpace() });
+
+      session.requestAnimationFrame(onXRFrame);
+    }
+
+    function onXRFrame(time, frame) {
+      const xrViewerPose = frame.getViewerPose(renderer.xr.getReferenceSpace());
+
+      const hitTestResults = frame.getHitTestResults(xrHitTestSource);
+
+      if (hitTestResults.length > 0) {
+        const hit = hitTestResults[0];
+        const hitMatrix = new THREE.Matrix4().fromArray(hit.getPose(renderer.xr.getReferenceSpace()).transform.matrix);
+        reticle.position.setFromMatrixPosition(hitMatrix);
+        reticle.visible = true;
+      } else {
+        reticle.visible = false;
+      }
+
+      renderer.render(scene, camera);
+      session.requestAnimationFrame(onXRFrame);
+    }
+
+    function animate() {
+      renderer.setAnimationLoop(() => {
+        renderer.render(scene, camera);
+      });
+    }
+  </script>
+</body>
+</html>
