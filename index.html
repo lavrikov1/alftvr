@@ -1,52 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR AR Circle Example</title>
+    <title>WebXR VR Circle Example</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; }
-        canvas { display: block; }
+      body { margin: 0; padding: 0; overflow: hidden; }
+      canvas { display: block; }
+      #vrButton {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 20px;
+        background-color: #4285f4;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
     </style>
-    <!-- Подключаем необходимые библиотеки -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.126.1/examples/js/ar/ARButton.js"></script>
-</head>
-<body>
+    <script src="https://cdn.jsdelivr.net/npm/@webxr-input-profiles/motion-controllers@1.0.0"></script>
+  </head>
+  <body>
     <script>
-        let scene, camera, renderer, reticle;
-        let controller, hitTestSource = null, hitTestSourceRequested = false;
+      let scene, camera, renderer, reticle;
+      let controller, hitTestSource = null, hitTestSourceRequested = false;
 
-        init();
-        animate();
+      init();
+      animate();
 
-        function init() {
-            // Создание сцены
-            scene = new THREE.Scene();
+      function init() {
+        // Создание сцены
+        scene = new THREE.Scene();
 
-            // Настройка камеры
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+        // Настройка камеры
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-            // Настройка рендерера
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.xr.enabled = true;
-            document.body.appendChild(renderer.domElement);
+        // Настройка рендерера
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
 
-            // Создание кнопки AR
-            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+        // Создание кнопки VR
+        const vrButton = document.createElement('button');
+        vrButton.id = 'vrButton';
+        vrButton.innerText = 'Enter VR';
+        vrButton.onclick = () => {
+          navigator.xr.requestSession('immersive-vr').then((session) => {
+            renderer.xr.setSession(session);
+          });
+        };
+        document.body.appendChild(vrButton);
 
-            // Создание сетки (круг) для размещения на поверхности
-            const geometry = new THREE.CircleGeometry(0.5, 32);
-            const material = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide });
-            reticle = new THREE.Mesh(geometry, material);
-            reticle.rotation.x = -Math.PI / 2;
-            reticle.visible = false;
-            scene.add(reticle);
+        // Создание сетки (круг) для размещения на поверхности
+        const geometry = new THREE.CircleGeometry(0.5, 32);
+        const material = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide });
+        reticle = new THREE.Mesh(geometry, material);
+        reticle.rotation.x = -Math.PI / 2;
+        reticle.visible = false;
+        scene.add(reticle);
 
-            // Контроллер для взаимодействия
-            controller = renderer.xr.getController(0);
-            scene.add(controller);
+        // Контроллер для взаимодействия
+        controller = renderer.xr.getController(0);
+        scene.add(controller);
 
-            // Обработка движения
+        // Обработка движения
+        controller.addEventListener('select', () => {
+          if (reticle.visible) {
+            const circle = reticle.clone();
+            scene.add(circle);
+          }
+        });
+
+        window.addEventListener('resize', onWindowResize);
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      // Функция для анимации
+      function animate() {
+        renderer.setAnimationLoop(render);
+      }
+
+      function render(timestamp, frame) {
+        if (frame) {
+          const referenceSpace = renderer.xr.getReferenceSpace();
+          const session = renderer.xr.getSession();
+
+          if (!hitTestSourceRequested) {
+            session.requestReferenceSpace('viewer').then((viewerReferenceSpace) => {
+              session.requestHitTestSource({ space: viewerReferenceSpace }).then((source) => {
+                hitTestSource = source;
+              });
+            });
+
+            session.addEventListener('end', () => {
+              hitTestSourceRequested = false;
+              hitTestSource = null;
+            });
+
+            hitTestSourceRequested = true;
+          }
+
+          if (hitTestSource) {
+            const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+            if (hitTestResults.length) {
+              const hit = hitTestResults[0];
+              const referenceSpace = renderer.xr.getReferenceSpace();
+              const hitPose = hit.getPose(referenceSpace);
+
+              reticle.visible = true;
+              reticle.position.set(hitPose.transform.position.x, hitPose.transform.position.y, hitPose.transform.position.z);
+            } else {
+              reticle.visible = false;
+            }
+          }
+        }
+
+        renderer.render(scene, camera);
+      }
+    </script>
+  </body>
+</html>
