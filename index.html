@@ -3,50 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Circle on Floor</title>
+    <title>WebXR Glowing Object Example</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f7f7f7;
-        }
-        #arButton {
-            padding: 15px 30px;
-            background-color: #4285f4;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-        }
+        body { margin: 0; padding: 0; overflow: hidden; }
+        canvas { display: block; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/jsm/webxr/ARButton.js"></script>
 </head>
 <body>
-
-    <!-- Кнопка для просмотра круга в AR -->
-    <a id="arButton" href="https://lavrikov1.github.io/alftvr/Blender-Alfred-v.04.usdz" rel="ar" aria-label="View circle in AR">
-        View Circle in AR
-    </a>
-
     <script>
-        // Проверка, поддерживается ли Quick Look на устройстве
-        document.addEventListener('DOMContentLoaded', function () {
-            const anchor = document.querySelector('#arButton');
+        let scene, camera, renderer, reticle, object, ambientLight, pointLight, darkOverlay;
 
-            // Если устройство поддерживает AR Quick Look, показываем кнопку
-            if (window.navigator.platform.startsWith('iPhone') || window.navigator.platform.startsWith('iPad')) {
-                anchor.style.display = 'block';
-            } else {
-                // Если устройство не поддерживает AR Quick Look
-                anchor.style.display = 'none';
-                alert('This feature is supported only on iPhone or iPad with iOS 12 and later.');
-            }
-        });
+        init();
+        animate();
+
+        function init() {
+            // Создание сцены
+            scene = new THREE.Scene();
+
+            // Создание камеры
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+            // Создание рендерера
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Кнопка для запуска AR-сессии
+            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+
+            // Добавление полупрозрачного слоя для затемнения фона
+            darkOverlay = new THREE.Mesh(
+                new THREE.PlaneGeometry(100, 100),
+                new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 })
+            );
+            darkOverlay.position.set(0, 0, -2);  // Затемняем всё за объектом
+            scene.add(darkOverlay);
+
+            // Создание светящегося объекта (круг с эмиссией)
+            const geometry = new THREE.CircleGeometry(0.5, 32);
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 0.9 });
+            object = new THREE.Mesh(geometry, material);
+            object.rotation.x = -Math.PI / 2;  // Размещаем на полу
+            scene.add(object);
+
+            // Добавляем мягкое освещение
+            ambientLight = new THREE.AmbientLight(0x404040); // Мягкий свет
+            scene.add(ambientLight);
+
+            pointLight = new THREE.PointLight(0x00ff00, 1, 5);  // Свет, который создаёт эффект свечения
+            pointLight.position.set(0, 0.5, 0);  // Источник света над объектом
+            scene.add(pointLight);
+
+            // Изменение размеров окна
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Анимация
+        function animate() {
+            renderer.setAnimationLoop(render);
+        }
+
+        // Рендеринг
+        function render() {
+            renderer.render(scene, camera);
+        }
     </script>
-
 </body>
 </html>
