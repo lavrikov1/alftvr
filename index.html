@@ -3,66 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR Glowing Object Example</title>
+    <title>Manual AR Button Example</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; }
         canvas { display: block; }
+        #arButton {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
     </style>
-    <!-- Подключаем Three.js и рабочую версию ARButton -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.126.1/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.126.1/examples/js/ar/ARButton.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
 </head>
 <body>
+    <!-- Кнопка для запуска AR -->
+    <button id="arButton">Enter AR</button>
+
     <script>
-        let scene, camera, renderer, reticle, object, ambientLight, pointLight, darkOverlay;
+        let scene, camera, renderer, object, pointLight, darkOverlay;
+        let session = null;
 
-        init();
-        animate();
-
-        function init() {
-            // Создание сцены
+        // Инициализация сцены и объекта
+        function initScene() {
             scene = new THREE.Scene();
 
-            // Создание камеры
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-            // Создание рендерера
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // Кнопка для запуска AR-сессии
-            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
-
-            // Добавление полупрозрачного слоя для затемнения фона
+            // Полупрозрачный фон
             darkOverlay = new THREE.Mesh(
                 new THREE.PlaneGeometry(100, 100),
                 new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 })
             );
-            darkOverlay.position.set(0, 0, -2);  // Затемняем всё за объектом
+            darkOverlay.position.set(0, 0, -2);
             scene.add(darkOverlay);
 
-            // Создание светящегося объекта (круг с эмиссией)
+            // Светящийся объект
             const geometry = new THREE.CircleGeometry(0.5, 32);
-            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 0.9 });
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 1 });
             object = new THREE.Mesh(geometry, material);
-            object.rotation.x = -Math.PI / 2;  // Размещаем на полу
+            object.rotation.x = -Math.PI / 2;  // Объект на полу
             scene.add(object);
 
-            // Добавляем мягкое освещение
-            ambientLight = new THREE.AmbientLight(0x404040); // Мягкий свет
-            scene.add(ambientLight);
-
-            pointLight = new THREE.PointLight(0x00ff00, 1, 5);  // Свет, который создаёт эффект свечения
-            pointLight.position.set(0, 0.5, 0);  // Источник света над объектом
+            // Свет
+            pointLight = new THREE.PointLight(0x00ff00, 1, 5);
+            pointLight.position.set(0, 0.5, 0);
             scene.add(pointLight);
 
-            // Изменение размеров окна
             window.addEventListener('resize', onWindowResize);
         }
 
+        // Изменение размеров окна
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -71,13 +75,27 @@
 
         // Анимация
         function animate() {
-            renderer.setAnimationLoop(render);
+            renderer.setAnimationLoop(() => {
+                renderer.render(scene, camera);
+            });
         }
 
-        // Рендеринг
-        function render() {
-            renderer.render(scene, camera);
-        }
+        // Обработка запуска AR-сессии вручную
+        document.getElementById('arButton').addEventListener('click', async () => {
+            if (navigator.xr) {
+                try {
+                    session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['hit-test'] });
+                    renderer.xr.setSession(session);
+                    initScene();
+                    animate();
+                    document.getElementById('arButton').style.display = 'none';  // Скрыть кнопку после запуска
+                } catch (e) {
+                    console.error('Failed to start AR session:', e);
+                }
+            } else {
+                alert('WebXR not supported on this device.');
+            }
+        });
     </script>
 </body>
 </html>
